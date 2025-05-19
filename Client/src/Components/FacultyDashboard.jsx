@@ -1,0 +1,499 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+
+const FacultyDashboard = () => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('upload');
+  const [departments, setDepartments] = useState([]);
+  const [semesters, setSemesters] = useState([]);
+  const [departmentTypes, setDepartmentTypes] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [filteredSubjects, setFilteredSubjects] = useState([]);
+  const [notes, setNotes] = useState([]);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    department: '',
+    semester: '',
+    departmentType: '',
+    subject: '',
+    topic: '',
+    file: null
+  });
+
+  // Initialize with mock data
+  useEffect(() => {
+    setDepartments([{ id: 'btech', name: 'B.Tech' }]);
+    
+    setSemesters([
+      { id: '1', name: '1st Semester' },
+      { id: '2', name: '2nd Semester' },
+      { id: '3', name: '3rd Semester' },
+      { id: '4', name: '4th Semester' },
+      { id: '5', name: '5th Semester' },
+      { id: '6', name: '6th Semester' },
+      { id: '7', name: '7th Semester' },
+      { id: '8', name: '8th Semester' }
+    ]);
+    
+    setDepartmentTypes([
+      { id: 'core', name: 'Core' },
+      { id: 'aiml', name: 'AI-ML' },
+      { id: 'cyber', name: 'Cyber Security' },
+      { id: 'aids', name: 'AI-DS' }
+    ]);
+    
+    setSubjects([
+      // Core subjects
+      { id: 'micro', name: 'Microprocessor', type: 'core' },
+      { id: 'daa', name: 'Design Analysis and Algorithms(DAA)', type: 'core' },
+      { id: 'java', name: 'Java Programming', type: 'core' },
+      { id: 'fa', name: 'Finite Automata', type: 'core' },
+      { id: 'cs', name: 'Career Skills', type: 'core' },
+      
+      // AI-ML subjects
+      { id: 'dl', name: 'Deep Learning', type: 'aiml' },
+      { id: 'daa-aiml', name: 'Design Analysis and Algorithms(DAA)', type: 'aiml' },
+      { id: 'ml', name: 'Machine Learning', type: 'aiml' },
+      { id: 'nn', name: 'Neural Networks', type: 'aiml' },
+      
+      // Cyber Security subjects
+      { id: 'daa-cyber', name: 'Design Analysis and Algorithms(DAA)', type: 'cyber' },
+      { id: 'ns', name: 'Network Security', type: 'cyber' },
+      { id: 'crypto', name: 'Cryptography', type: 'cyber' },
+      
+      // AI-DS subjects
+      { id: 'dm', name: 'Data Mining', type: 'aids' },
+      { id: 'daa-aids', name: 'Design Analysis and Algorithms(DAA)', type: 'aids' },
+      { id: 'sa', name: 'Statistical Analysis', type: 'aids' }
+    ]);
+
+    // Load existing notes from localStorage
+    const existingNotes = JSON.parse(localStorage.getItem('notes') || '[]');
+    setNotes(existingNotes);
+  }, []);
+
+  // Filter subjects based on department type
+  useEffect(() => {
+    if (formData.departmentType) {
+      const filtered = subjects.filter(subject => subject.type === formData.departmentType);
+      setFilteredSubjects(filtered);
+    } else {
+      setFilteredSubjects([]);
+    }
+  }, [formData.departmentType, subjects]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+  };
+
+  const handleFileChange = (e) => {
+    setFormData({
+      ...formData,
+      file: e.target.files[0]
+    });
+  };
+
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    return new Date(dateString).toLocaleDateString('en-US', options);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const base64File = await fileToBase64(formData.file);
+      
+      const newNote = {
+        id: Date.now(),
+        departmentType: formData.departmentType,
+        semester: formData.semester,
+        subject: formData.subject,
+        topic: formData.topic,
+        fileName: formData.file.name,
+        fileSize: formData.file.size,
+        uploadDate: new Date().toISOString(),
+        fileType: formData.file.type
+      };
+
+      const updatedNotes = [...notes, newNote];
+      setNotes(updatedNotes);
+      localStorage.setItem('notes', JSON.stringify(updatedNotes));
+      localStorage.setItem(`note_file_${newNote.id}`, base64File);
+
+      // Reset form
+      setFormData({
+        department: '',
+        semester: '',
+        departmentType: '',
+        subject: '',
+        topic: '',
+        file: null
+      });
+      
+      // Reset file input
+      document.getElementById('file').value = '';
+      
+      alert('Notes uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading note:', error);
+      alert('Error uploading note. Please try again.');
+    }
+  };
+
+  const deleteNote = (noteId) => {
+    if (!window.confirm('Are you sure you want to delete this note? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const updatedNotes = notes.filter(note => note.id !== noteId);
+      setNotes(updatedNotes);
+      localStorage.setItem('notes', JSON.stringify(updatedNotes));
+      localStorage.removeItem(`note_file_${noteId}`);
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      alert('Error deleting note. Please try again.');
+    }
+  };
+
+  const viewNote = (noteId) => {
+    const fileContent = localStorage.getItem(`note_file_${noteId}`);
+    if (!fileContent) {
+      alert('File content not found');
+      return;
+    }
+    window.open(fileContent, '_blank');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('facultyToken');
+    localStorage.removeItem('facultyData');
+    navigate('/faculty-login');
+  };
+
+  return (
+    <div className="flex h-screen bg-white">
+      {/* Sidebar */}
+      <div className="w-64 bg-gradient-to-b from-blue-500 to-purple-600 text-white flex flex-col">
+        <div className="p-6 flex items-center justify-center border-b border-blue-400/30">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <h1 className="text-xl font-bold">Faculty Portal</h1>
+        </div>
+        
+        <nav className="flex-1 p-4">
+          <ul className="space-y-2">
+            <li>
+              <button 
+                onClick={() => setActiveTab('upload')}
+                className={`w-full flex items-center p-3 rounded-md transition-colors ${activeTab === 'upload' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span>Upload Notes</span>
+              </button>
+            </li>
+            <li>
+              <button 
+                onClick={() => setActiveTab('quiz')}
+                className={`w-full flex items-center p-3 rounded-md transition-colors ${activeTab === 'quiz' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Quiz</span>
+              </button>
+            </li>
+            <li>
+              <button 
+                onClick={() => setActiveTab('performance')}
+                className={`w-full flex items-center p-3 rounded-md transition-colors ${activeTab === 'performance' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span>Performance</span>
+              </button>
+            </li>
+            <li>
+              <button 
+                onClick={() => setActiveTab('feedback')}
+                className={`w-full flex items-center p-3 rounded-md transition-colors ${activeTab === 'feedback' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <span>Student Feedback</span>
+              </button>
+            </li>
+            <li>
+              <button 
+                onClick={() => setActiveTab('profile')}
+                className={`w-full flex items-center p-3 rounded-md transition-colors ${activeTab === 'profile' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>Profile</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
+        
+        <div className="p-4 mt-auto">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center p-3 border border-white/20 rounded-md hover:bg-white/10 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+      
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        {activeTab === 'upload' && (
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Upload Notes</h2>
+            
+            <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+              <form onSubmit={handleSubmit}>
+                <div className="mb-5">
+                  <label className="block text-blue-500 mb-2">Department</label>
+                  <select 
+                    name="department"
+                    value={formData.department}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="" disabled>Select Department</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>                npm run dev
+                
+                <div className="mb-5">
+                  <label className="block text-blue-500 mb-2">Semester</label>
+                  <select 
+                    name="semester"
+                    value={formData.semester}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="" disabled>Select Semester</option>
+                    {semesters.map(sem => (
+                      <option key={sem.id} value={sem.id}>{sem.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="mb-5">
+                  <label className="block text-blue-500 mb-2">Department Type</label>
+                  <select 
+                    name="departmentType"
+                    value={formData.departmentType}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="" disabled>Select Department Type</option>
+                    {departmentTypes.map(type => (
+                      <option key={type.id} value={type.id}>{type.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="mb-5">
+                  <label className="block text-blue-500 mb-2">Subject</label>
+                  <select 
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={filteredSubjects.length === 0}
+                  >
+                    <option value="" disabled>Select Subject</option>
+                    {filteredSubjects.map(subject => (
+                      <option key={subject.id} value={subject.name}>{subject.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="mb-5">
+                  <label className="block text-blue-500 mb-2">Topic</label>
+                  <input 
+                    type="text"
+                    name="topic"
+                    value={formData.topic}
+                    onChange={handleInputChange}
+                    placeholder="Enter topic name"
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div className="mb-6">
+                  <label className="block text-blue-500 mb-2">Upload File</label>
+                  <input 
+                    type="file"
+                    id="file"
+                    onChange={handleFileChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Supported formats: PDF, DOC, DOCX, PPT, PPTX</p>
+                </div>
+                
+                <button 
+                  type="submit" 
+                  className="w-full flex items-center justify-center p-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Upload Notes
+                </button>
+              </form>
+            </div>
+            
+            <div className="mt-8 max-w-4xl mx-auto">
+              <h3 className="text-xl font-semibold text-gray-700 mb-4">Uploaded Notes</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {notes.length === 0 ? (
+                  <div className="col-span-full text-center py-8 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p>No notes uploaded yet</p>
+                  </div>
+                ) : (
+                  notes.map(note => (
+                    <div key={note.id} className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{note.subject}</h4>
+                          <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full mt-1">
+                            Semester {note.semester}
+                          </span>
+                        </div>
+                        <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
+                          {note.departmentType.toUpperCase()}
+                        </span>
+                      </div>
+                      <h5 className="text-gray-700 mb-2">{note.topic}</h5>
+                      <div className="text-sm text-gray-500 space-y-1 mb-3">
+                        <p className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          {note.fileName}
+                        </p>
+                        <p className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {formatDate(note.uploadDate)}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => viewNote(note.id)}
+                          className="flex-1 bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition-colors"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => deleteNote(note.id)}
+                          className="flex-1 bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'quiz' && (
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Generate Quiz</h2>
+            <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+              <p className="text-center text-gray-500">Quiz generation functionality will be implemented here.</p>
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'performance' && (
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Performance Statistics</h2>
+            <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+              <p className="text-center text-gray-500">Performance statistics will be displayed here.</p>
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'feedback' && (
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Student Feedback</h2>
+            <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+              <p className="text-center text-gray-500">Student feedback will be displayed here.</p>
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'profile' && (
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Faculty Profile</h2>
+            <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+              <p className="text-center text-gray-500">Faculty profile information will be displayed here.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default FacultyDashboard;
