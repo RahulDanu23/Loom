@@ -10,12 +10,14 @@ import quizRoutes from './routes/quizRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import facultyRoutes from './routes/facultyRoutes.js';
 import sendEmail from './config/nodemailer.js';
-import authRouter from './Routes/authRoutes.js';
+import authRouter from './routes/authRoutes.js';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+connectDB();
+
 
 // Security & Middleware
 app.use(helmet());

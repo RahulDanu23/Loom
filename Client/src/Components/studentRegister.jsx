@@ -1,248 +1,346 @@
-// Components/StudentRegister.jsx
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useRef, memo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { FaLock } from 'react-icons/fa';
 import { 
-  faUserPlus, faUser, faEnvelope, faUsers, 
-  faHashtag, faEye, faEyeSlash, faArrowLeft, faKey, faPaperPlane
-} from '@fortawesome/free-solid-svg-icons';
-import { authService } from '../services/api';
+  FaUser, FaEnvelope, FaUsers, FaHashtag, 
+  FaEye, FaEyeSlash, FaUserGraduate, FaBookOpen, FaLayerGroup 
+} from 'react-icons/fa';
+
+// Memoized InputField component to prevent unnecessary re-renders
+const InputField = memo(({ 
+  icon, type, name, placeholder, value, onChange, 
+  required = true, options, isPassword = false, fieldName, showPassword, onTogglePassword 
+}) => {
+  const inputRef = useRef(null);
+  
+  return (
+    <div className="relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        {icon}
+      </div>
+      {type === 'select' ? (
+        <select
+          name={name}
+          value={value}
+          onChange={onChange}
+          required={required}
+          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 appearance-none"
+        >
+          <option value="">{placeholder}</option>
+          {options && options.map((option, index) => (
+            <option 
+              key={option.value || option || `option-${index}`} 
+              value={option.value || option}
+            >
+              {option.label || option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type={isPassword ? (showPassword ? 'text' : 'password') : type}
+            name={name}
+            placeholder={placeholder}
+            value={value}
+            onChange={onChange}
+            required={required}
+            autoComplete={isPassword ? 'new-password' : 'off'}
+            className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+          />
+          {isPassword && (
+            <button
+              type="button"
+              onClick={onTogglePassword}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
+            >
+              {showPassword ? <FaEyeSlash /> : <FaEye />}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
 
 const StudentRegister = () => {
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
+  const formRef = useRef(null);
+  
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    semester: '',
+    department: '',
+    section: '',
+    universityRoll: '',
+    classRoll: '',
+    password: '',
+    confirmPassword: ''
+  });
+  
+  const [showPassword, setShowPassword] = useState({
+    password: false,
+    confirmPassword: false
+  });
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    rollNumber: '',
-    department: ''
-  });
+  const departments = [
+    { value: 'cse', label: 'Computer Science (CSE)' },
+    { value: 'it', label: 'Information Technology (IT)' },
+    { value: 'ece', label: 'Electronics & Communication (ECE)' },
+    { value: 'eee', label: 'Electrical & Electronics (EEE)' },
+    { value: 'mech', label: 'Mechanical (MECH)' },
+    { value: 'civil', label: 'Civil (CIVIL)' }
+  ];
 
-  const handleChange = (e) => {
+  const semesters = Array.from({ length: 10 }, (_, i) => (i + 1).toString());
+  const sections = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-  };
+  }, []);
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+  const togglePasswordVisibility = useCallback((field) => {
+    setShowPassword(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    // Validate required fields
+    const requiredFields = ['fullName', 'email', 'semester', 'department', 'section', 'universityRoll', 'classRoll', 'password'];
+    const missingFields = requiredFields.filter(field => !formData[field]);
+    
+    if (missingFields.length > 0) {
+      setError(`Please fill in all required fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
     setLoading(true);
-
-    if (!formData.name || !formData.email || !formData.password || !formData.rollNumber || !formData.department) {
-      setError('All fields are required');
-      setLoading(false);
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const response = await axios.post('http://localhost:4000/api/students/register', formData, {
-        headers: {
-          'Content-Type': 'application/json'
+      const requestData = {
+        name: formData.fullName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        semester: formData.semester,
+        department: formData.department,
+        section: formData.section,
+        universityRollNo: formData.universityRoll.trim(),
+        classRollNo: formData.classRoll.trim(),
+        password: formData.password
+      };
+
+      console.log('Final request data being sent:', JSON.stringify(requestData, null, 2));
+
+      const response = await axios.post(
+        'http://localhost:5000/api/students/register',
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (status) => status < 500, // Reject only if status is 500 or higher
+        }
+      );
+
+      console.log('Registration response:', response.data);
+
+      if (response.data.success) {
+        toast.success('Registration successful! Please login.');
+        navigate('/student-login');
+      } else {
+        throw new Error(response.data.message || 'Registration failed');
+      }
+    } catch (error) {
+      console.error('Registration error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          data: error.config?.data
         }
       });
 
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.student));
-        toast.success('Registration successful!');
-        navigate('/student-dashboard');
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
       }
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePasswordReset = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const response = await authService.forgotPassword(formData.resetEmail);
-      
-      if (response.success) {
-        toast.success('Password reset link sent to your email!');
-        navigate('/student-login');
-      } else {
-        setError(response.message || 'Failed to send reset link');
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error('Password reset error:', err);
-      setError(err.message || 'Failed to reset password');
-      setLoading(false);
-      toast.error(err.message || 'Failed to send reset link');
-    }
-  };
+  }, [formData, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500 p-5">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md relative">
-        <div className="absolute top-4 left-4">
-          <button 
-            onClick={() => navigate('/student-login')}
-            className="bg-blue-500 text-white rounded-full px-4 py-2 flex items-center gap-2 text-sm hover:bg-blue-600 transition-all hover:-translate-x-1"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} /> Back
-          </button>
-        </div>
-
-        <div className="text-center mb-6 mt-6">
-          <FontAwesomeIcon icon={faUserPlus} className="text-5xl text-blue-500 mb-3" />
-          <h1 className="text-2xl font-bold text-gray-800">Create Account</h1>
-        </div>
-        
-        {error && (
-          <div className="p-3 mb-4 bg-red-50 text-red-700 rounded-md">
-            {error}
-          </div>
-        )}
-        
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
-              <div className="mt-1 relative">
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your full name"
-                />
-                <FontAwesomeIcon icon={faUser} className="absolute right-3 top-3 text-gray-400" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="w-full max-w-4xl">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="bg-white p-3 rounded-full">
+                <FaUserGraduate className="w-8 h-8 text-indigo-600" />
               </div>
             </div>
+            <h1 className="text-2xl font-bold text-white">Student Registration</h1>
+            <p className="text-blue-100 mt-2">Create your account to get started</p>
+          </div>
+          
+          {/* Form */}
+          <div className="p-8">
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+            
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Full Name */}
+                <InputField
+                  icon={<FaUser className="h-5 w-5 text-gray-400" />}
+                  type="text"
+                  name="fullName"
+                  placeholder="Full Name"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                />
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email address</label>
-              <div className="mt-1 relative">
-                <input
-                  id="email"
-                  name="email"
+                {/* Email */}
+                <InputField
+                  icon={<FaEnvelope className="h-5 w-5 text-gray-400" />}
                   type="email"
-                  required
+                  name="email"
+                  placeholder="Email Address"
                   value={formData.email}
                   onChange={handleChange}
-                  className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your email"
                 />
-                <FontAwesomeIcon icon={faEnvelope} className="absolute right-3 top-3 text-gray-400" />
-              </div>
-            </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-              <div className="mt-1 relative">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={formData.password}
+                {/* Semester */}
+                <InputField
+                  icon={<FaLayerGroup className="h-5 w-5 text-gray-400" />}
+                  type="select"
+                  name="semester"
+                  placeholder="Select Semester"
+                  value={formData.semester}
                   onChange={handleChange}
-                  className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your password"
+                  options={semesters.map(s => ({ value: s, label: `Semester ${s}` }))}
                 />
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute right-3 top-3 text-gray-400"
-                >
-                  <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
-                </button>
-              </div>
-            </div>
 
-            <div>
-              <label htmlFor="rollNumber" className="block text-sm font-medium text-gray-700">Roll Number</label>
-              <div className="mt-1 relative">
-                <input
-                  id="rollNumber"
-                  name="rollNumber"
-                  type="text"
-                  required
-                  value={formData.rollNumber}
-                  onChange={handleChange}
-                  className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your roll number"
-                />
-                <FontAwesomeIcon icon={faHashtag} className="absolute right-3 top-3 text-gray-400" />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="department" className="block text-sm font-medium text-gray-700">Department</label>
-              <div className="mt-1 relative">
-                <select
-                  id="department"
+                {/* Department */}
+                <InputField
+                  icon={<FaBookOpen className="h-5 w-5 text-gray-400" />}
+                  type="select"
                   name="department"
-                  required
+                  placeholder="Select Department"
                   value={formData.department}
                   onChange={handleChange}
-                  className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Department</option>
-                  <option value="core">Core</option>
-                  <option value="aiml">AI-ML</option>
-                  <option value="cyber">Cyber Security</option>
-                  <option value="aids">AI-DS</option>
-                </select>
-                <FontAwesomeIcon icon={faUsers} className="absolute right-3 top-3 text-gray-400" />
-              </div>
-            </div>
-          </div>
+                  options={departments}
+                />
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
-                loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-            >
-              {loading ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Registering...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <FontAwesomeIcon icon={faPaperPlane} className="mr-2" />
-                  Register
-                </span>
-              )}
-            </button>
+                {/* Section */}
+                <InputField
+                  icon={<FaUsers className="h-5 w-5 text-gray-400" />}
+                  type="select"
+                  name="section"
+                  placeholder="Select Section"
+                  value={formData.section}
+                  onChange={handleChange}
+                  options={sections.map(s => ({ value: s, label: s }))}
+                />
+
+                {/* University Roll No */}
+                <InputField
+                  icon={<FaHashtag className="h-5 w-5 text-gray-400" />}
+                  type="text"
+                  name="universityRoll"
+                  placeholder="University Roll Number"
+                  value={formData.universityRoll}
+                  onChange={handleChange}
+                />
+
+                {/* Class Roll No */}
+                <InputField
+                  icon={<FaHashtag className="h-5 w-5 text-gray-400" />}
+                  type="text"
+                  name="classRoll"
+                  placeholder="Class Roll Number"
+                  value={formData.classRoll}
+                  onChange={handleChange}
+                />
+
+                {/* Password */}
+                <InputField
+                  icon={<FaLock className="h-5 w-5 text-gray-400" />}
+                  type="password"
+                  name="password"
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  isPassword={true}
+                  fieldName="password"
+                  showPassword={showPassword.password}
+                  onTogglePassword={() => togglePasswordVisibility('password')}
+                />
+
+                {/* Confirm Password */}
+                <InputField
+                  icon={<FaLock className="h-5 w-5 text-gray-400" />}
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Confirm Password"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  isPassword={true}
+                  fieldName="confirmPassword"
+                  showPassword={showPassword.confirmPassword}
+                  onTogglePassword={() => togglePasswordVisibility('confirmPassword')}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  Already have an account?{' '}
+                  <Link to="/student-login" className="font-medium text-indigo-600 hover:text-indigo-500">
+                    Sign in
+                  </Link>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Registering...' : 'Register'}
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

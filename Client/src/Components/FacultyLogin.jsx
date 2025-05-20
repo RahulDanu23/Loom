@@ -1,385 +1,161 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import axios from 'axios';
+import { FaUserTie, FaLock, FaEnvelope, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 const FacultyLogin = () => {
   const navigate = useNavigate();
-  const [activeForm, setActiveForm] = useState('login-form');
-  const [loginData, setLoginData] = useState({
-    facultyId: '',
-    password: '',
-    rememberMe: false
-  });
-  const [registerData, setRegisterData] = useState({
-    fullName: '',
+  const [formData, setFormData] = useState({
     email: '',
-    facultyId: '',
-    password: '',
-    confirmPassword: ''
+    password: ''
   });
-  const [resetData, setResetData] = useState({
-    facultyId: ''
-  });
-  const [showPassword, setShowPassword] = useState({
-    login: false,
-    register: false,
-    confirm: false
-  });
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleLoginChange = (e) => {
-    const { name, value, checked, type } = e.target;
-    setLoginData({
-      ...loginData,
-      [name]: type === 'checkbox' ? checked : value
-    });
+  const { email, password } = formData;
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleRegisterChange = (e) => {
-    const { name, value } = e.target;
-    setRegisterData({
-      ...registerData,
-      [name]: value
-    });
-  };
-
-  const handleResetChange = (e) => {
-    const { name, value } = e.target;
-    setResetData({
-      ...resetData,
-      [name]: value
-    });
-  };
-
-  const handleLoginSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (loginData.facultyId && loginData.password) {
-      sessionStorage.setItem('facultyId', loginData.facultyId);
-      navigate('/faculty-dashboard');
-    } else {
-      alert('Please enter valid credentials');
-    }
-  };
-
-  const handleRegisterSubmit = (e) => {
-    e.preventDefault();
-    if (registerData.password !== registerData.confirmPassword) {
-      alert('Passwords do not match!');
+    
+    if (!email || !password) {
+      toast.error('Please fill in all fields');
       return;
     }
 
-    if (registerData.fullName && registerData.email && registerData.facultyId && registerData.password) {
-      alert('Registration successful! Please login with your credentials.');
-      setRegisterData({
-        fullName: '',
-        email: '',
-        facultyId: '',
-        password: '',
-        confirmPassword: ''
+    setLoading(true);
+    
+    try {
+      const response = await axios.post('http://localhost:5000/api/faculty/login', {
+        email,
+        password
       });
-      setActiveForm('login-form');
-    } else {
-      alert('Please fill in all fields');
+      
+      // Save token to localStorage
+      localStorage.setItem('facultyToken', response.data.token);
+      
+      // Redirect to faculty dashboard
+      toast.success('Login successful!');
+      navigate('/faculty-dashboard');
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleResetSubmit = (e) => {
-    e.preventDefault();
-    if (resetData.facultyId) {
-      alert('Password reset instructions have been sent to your registered email');
-      setActiveForm('login-form');
-    } else {
-      alert('Please enter your faculty ID');
-    }
-  };
-
-  const togglePasswordVisibility = (field) => {
-    setShowPassword({
-      ...showPassword,
-      [field]: !showPassword[field]
-    });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex justify-center items-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="p-8">
-          {/* Back button */}
-          <Link to="/" className="text-blue-500 hover:text-blue-700 flex items-center mb-4">
-            <i className="fas fa-arrow-left mr-2"></i>
-            <span>Back</span>
-          </Link>
-
-          {/* Login Form */}
-          {activeForm === 'login-form' && (
-            <>
-              <div className="text-center mb-8">
-                <div className="bg-blue-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
-                  <i className="fas fa-chalkboard-teacher text-blue-500 text-2xl"></i>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="bg-white p-3 rounded-full">
+                <FaUserTie className="w-8 h-8 text-indigo-600" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-white">Faculty Login</h1>
+            <p className="text-blue-100 mt-2">Welcome back! Please enter your credentials</p>
+          </div>
+          
+          {/* Form */}
+          <div className="p-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaEnvelope className="h-5 w-5 text-gray-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800">Faculty Portal</h2>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={handleChange}
+                />
               </div>
 
-              <form onSubmit={handleLoginSubmit}>
-                <div className="mb-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">
-                      <i className="fas fa-user-tie"></i>
-                    </span>
-                    <input
-                      type="text"
-                      name="facultyId"
-                      value={loginData.facultyId}
-                      onChange={handleLoginChange}
-                      placeholder="Enter your faculty ID"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
+              {/* Password Field */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaLock className="h-5 w-5 text-gray-400" />
                 </div>
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                  placeholder="Password"
+                  value={password}
+                  onChange={handleChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
 
-                <div className="mb-4">
-                  <div className="relative">
-                    <input
-                      type={showPassword.login ? "text" : "password"}
-                      name="password"
-                      value={loginData.password}
-                      onChange={handleLoginChange}
-                      placeholder="Enter your password"
-                      className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePasswordVisibility('login')}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <i className={`fas ${showPassword.login ? "fa-eye-slash" : "fa-eye"}`}></i>
-                    </button>
-                  </div>
-                </div>
 
-                <div className="flex justify-between items-center mb-6">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="rememberMe"
-                      checked={loginData.rememberMe}
-                      onChange={handleLoginChange}
-                      className="mr-2 h-4 w-4 text-blue-500"
-                    />
-                    <span className="text-sm text-gray-600">Remember me</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setActiveForm('forgot-password-form')}
-                    className="text-blue-500 hover:text-blue-700 text-sm"
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200 ${
+                    loading ? 'opacity-75 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Signing in...
+                    </>
+                  ) : 'Sign in'}
+                </button>
+              </div>
+            </form>
+
+            {/* Links */}
+            <div className="mt-6 text-center space-y-4">
+              <div>
+                <Link 
+                  to="/forgot-password" 
+                  className="text-sm font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">
+                  Don't have an account?{' '}
+                  <Link 
+                    to="/faculty-register" 
+                    className="font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
                   >
-                    Forgot Password?
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-md transition duration-200 flex items-center justify-center"
-                >
-                  <span>Login</span>
-                  <i className="fas fa-arrow-right ml-2"></i>
-                </button>
-
-                <div className="text-center mt-6">
-                  <p className="text-sm text-gray-600">
-                    New faculty member?{' '}
-                    <button
-                      type="button"
-                      onClick={() => setActiveForm('register-form')}
-                      className="text-blue-500 hover:text-blue-700"
-                    >
-                      Register here
-                    </button>
-                  </p>
-                </div>
-              </form>
-            </>
-          )}
-
-          {/* Registration Form */}
-          {activeForm === 'register-form' && (
-            <>
-              <div className="text-center mb-8">
-                <div className="bg-blue-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
-                  <i className="fas fa-user-plus text-blue-500 text-2xl"></i>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-800">Faculty Registration</h2>
+                    Register here
+                  </Link>
+                </p>
               </div>
-
-              <form onSubmit={handleRegisterSubmit}>
-                <div className="mb-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">
-                      <i className="fas fa-user"></i>
-                    </span>
-                    <input
-                      type="text"
-                      name="fullName"
-                      value={registerData.fullName}
-                      onChange={handleRegisterChange}
-                      placeholder="Full Name"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">
-                      <i className="fas fa-envelope"></i>
-                    </span>
-                    <input
-                      type="email"
-                      name="email"
-                      value={registerData.email}
-                      onChange={handleRegisterChange}
-                      placeholder="Email Address"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">
-                      <i className="fas fa-id-card"></i>
-                    </span>
-                    <input
-                      type="text"
-                      name="facultyId"
-                      value={registerData.facultyId}
-                      onChange={handleRegisterChange}
-                      placeholder="Faculty ID"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="relative">
-                    <input
-                      type={showPassword.register ? "text" : "password"}
-                      name="password"
-                      value={registerData.password}
-                      onChange={handleRegisterChange}
-                      placeholder="Create Password"
-                      className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePasswordVisibility('register')}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <i className={`fas ${showPassword.register ? "fa-eye-slash" : "fa-eye"}`}></i>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <div className="relative">
-                    <input
-                      type={showPassword.confirm ? "text" : "password"}
-                      name="confirmPassword"
-                      value={registerData.confirmPassword}
-                      onChange={handleRegisterChange}
-                      placeholder="Confirm Password"
-                      className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => togglePasswordVisibility('confirm')}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <i className={`fas ${showPassword.confirm ? "fa-eye-slash" : "fa-eye"}`}></i>
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-md transition duration-200 flex items-center justify-center"
-                >
-                  <span>Register</span>
-                  <i className="fas fa-user-plus ml-2"></i>
-                </button>
-
-                <div className="text-center mt-6">
-                  <p className="text-sm text-gray-600">
-                    Already have an account?{' '}
-                    <button
-                      type="button"
-                      onClick={() => setActiveForm('login-form')}
-                      className="text-blue-500 hover:text-blue-700"
-                    >
-                      Login here
-                    </button>
-                  </p>
-                </div>
-              </form>
-            </>
-          )}
-
-          {/* Forgot Password Form */}
-          {activeForm === 'forgot-password-form' && (
-            <>
-              <div className="text-center mb-8">
-                <div className="bg-blue-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
-                  <i className="fas fa-key text-blue-500 text-2xl"></i>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-800">Reset Password</h2>
-              </div>
-
-              <form onSubmit={handleResetSubmit}>
-                <div className="mb-6">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500">
-                      <i className="fas fa-user-tie"></i>
-                    </span>
-                    <input
-                      type="text"
-                      name="facultyId"
-                      value={resetData.facultyId}
-                      onChange={handleResetChange}
-                      placeholder="Enter your faculty ID"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-md transition duration-200 flex items-center justify-center"
-                >
-                  <span>Reset Password</span>
-                  <i className="fas fa-paper-plane ml-2"></i>
-                </button>
-
-                <div className="text-center mt-6">
-                  <p className="text-sm text-gray-600">
-                    Remembered your password?{' '}
-                    <button
-                      type="button"
-                      onClick={() => setActiveForm('login-form')}
-                      className="text-blue-500 hover:text-blue-700"
-                    >
-                      Login here
-                    </button>
-                  </p>
-                </div>
-              </form>
-            </>
-          )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

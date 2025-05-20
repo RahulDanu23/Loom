@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -28,36 +29,78 @@ const StudentDashboard = () => {
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizResult, setQuizResult] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      navigate('/login');
+      navigate('/student-login');
       return;
     }
+  
+    // Set authorization header for all requests
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  
+    // Load student profile first
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        // Get current student data from the /me endpoint
+        const profileRes = await axios.get('http://localhost:5000/api/students/me');
+        
+        if (!profileRes.data || !profileRes.data.data) {
+          throw new Error('Invalid response format from server');
+        }
+        
+        const studentData = profileRes.data.data;
+        setStudent(studentData);
+        
+        // Update profile form with student data
+        setProfileForm({
+          name: studentData.name || '',
+          email: studentData.email || '',
+          section: studentData.section || '',
+          semester: studentData.semester || ''
+        });
+        
+        // After profile is loaded, load notes with department
+        if (studentData.department) {
+          try {
+            const notesRes = await axios.get(`http://localhost:5000/api/notes/department/${studentData.department}`);
+            setNotes(Array.isArray(notesRes.data.notes) ? notesRes.data.notes : []);
+          } catch (noteErr) {
+            console.error('Error loading notes:', noteErr);
+            toast.error('Failed to load notes. Please try again later.');
+          }
+        }
+      } catch (err) {
+        console.error('Error loading student data:', err);
+        
+        if (err.response?.status === 401) {
+          // Token is invalid or expired
+          localStorage.removeItem('token');
+          toast.error('Your session has expired. Please log in again.');
+          navigate('/student-login');
+        } else {
+          toast.error('Failed to load profile. Please try again later.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    // Set default axios header
-    axios.defaults.headers.common['x-auth-token'] = token;
-
-    // Load student profile
-    loadProfile();
-    // Load notes
-    loadNotes();
-    // Load quizzes
-    loadQuizzes();
-    // Load feedback
-    loadFeedback();
-  }, []);
+    loadInitialData();
+  }, [navigate]);
 
   const loadProfile = async () => {
     try {
-      const res = await axios.get('/api/students/profile');
-      setStudent(res.data);
+      const res = await axios.get('/api/students/me');
+      setStudent(res.data.data);
       setProfileForm({
-        name: res.data.name,
-        email: res.data.email,
-        section: res.data.section,
-        semester: res.data.semester
+        name: res.data.data.name,
+        email: res.data.data.email,
+        section: res.data.data.section,
+        semester: res.data.data.semester
       });
     } catch (err) {
       console.error('Error loading profile:', err);
@@ -66,10 +109,11 @@ const StudentDashboard = () => {
 
   const loadNotes = async () => {
     try {
-      const res = await axios.get('/api/notes', { params: filters });
-      setNotes(res.data);
+      const res = await axios.get('http://localhost:5000/api/notes/department/' + student?.department);
+      setNotes(Array.isArray(res.data.notes) ? res.data.notes : []);
     } catch (err) {
       console.error('Error loading notes:', err);
+      setNotes([]); // Ensure notes is always an array even if there's an error
     }
   };
 
@@ -118,7 +162,7 @@ const StudentDashboard = () => {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     try {
-      await axios.put('/api/students/profile', profileForm);
+      await axios.put('/api/students/me', profileForm);
       loadProfile();
     } catch (err) {
       console.error('Error updating profile:', err);
@@ -255,33 +299,40 @@ const StudentDashboard = () => {
             </button>
           </div>
 
-          {/* Notes Section */}
-          {activeSection === 'notes' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {notes.map(note => (
-                <div key={note._id} className="bg-white p-4 rounded-lg shadow">
-                  <h3 className="font-semibold">{note.subject}</h3>
-                  <p className="text-gray-600">{note.topic}</p>
-                  <p className="text-sm text-gray-500">Semester {note.semester}</p>
-                  <p className="text-sm text-gray-500">{note.departmentType}</p>
-                  <div className="mt-4 flex space-x-2">
-                    <button
-                      onClick={() => viewNote(note)}
-                      className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => downloadNote(note)}
-                      className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
-                    >
-                      Download
-                    </button>
+        {/* Notes Section */}
+        {activeSection === 'notes' && (
+          <div>
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+              </div>
+            ) : notes && notes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {notes.map(note => (
+                  <div key={note._id} className="bg-white p-4 rounded-lg shadow">
+                    <h3 className="font-semibold">{note.title}</h3>
+                    <p className="text-gray-600">{note.description}</p>
+                    <p className="text-sm text-gray-500">Uploaded by: {note.uploadedBy?.fullName || 'Unknown'}</p>
+                    <div className="mt-4 flex space-x-2">
+                      <a
+                        href={`http://localhost:5000${note.fileUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                      >
+                        Download
+                      </a>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No notes available for your department yet.</p>
+              </div>
+            )}
+          </div>
+        )}
 
           {/* Quizzes Section */}
           {activeSection === 'quizzes' && (
@@ -490,4 +541,4 @@ const StudentDashboard = () => {
   );
 };
 
-export default StudentDashboard; 
+export default StudentDashboard;

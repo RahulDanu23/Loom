@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 // Check if model exists
 if (mongoose.models.Note) {
@@ -6,47 +6,43 @@ if (mongoose.models.Note) {
 }
 
 const noteSchema = new mongoose.Schema({
-  subject: {
+  title: {
     type: String,
-    required: true
+    required: [true, 'Title is required'],
+    trim: true
   },
-  topic: {
+  description: {
     type: String,
-    required: true
+    required: [true, 'Description is required'],
+    trim: true
   },
-  departmentType: {
+  fileUrl: {
     type: String,
-    required: true,
-    enum: ['core', 'aiml', 'cyber', 'aids']
-  },
-  semester: {
-    type: Number,
-    required: true
-  },
-  fileName: {
-    type: String,
-    required: true
-  },
-  fileSize: {
-    type: Number,
-    required: true
+    required: [true, 'File URL is required']
   },
   fileType: {
     type: String,
-    required: true
+    required: [true, 'File type is required']
   },
-  fileContent: {
+  fileSize: {
+    type: Number,
+    required: [true, 'File size is required']
+  },
+  department: {
     type: String,
-    required: true
+    required: [true, 'Department is required'],
+    enum: ['core', 'aiml', 'cyber', 'aids']
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Faculty',
     required: true
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
   }
-}, { 
-  timestamps: true 
-});
+}, { timestamps: true });
 
 const Note = mongoose.model('Note', noteSchema);
 

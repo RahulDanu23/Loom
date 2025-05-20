@@ -1,5 +1,6 @@
 // server/models/Faculty.js
 import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 if (mongoose.models.Faculty) {
   delete mongoose.models.Faculty;
@@ -28,7 +29,8 @@ const facultySchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters long']
+    minlength: [6, 'Password must be at least 6 characters long'],
+    select: false // Don't include password in queries by default
   },
   department: {
     type: String,
@@ -50,8 +52,13 @@ const facultySchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Add index for faster queries
-facultySchema.index({ email: 1, facultyId: 1 });
+// Add indexes for faster queries
+facultySchema.index({ email: 1 });
+facultySchema.index({ facultyId: 1 });
 
-const Faculty = mongoose.model('Faculty', facultySchema);
-export default Faculty;
+// Add method to check if password matches
+facultySchema.methods.matchPassword = async function(enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+export default mongoose.model('Faculty', facultySchema);

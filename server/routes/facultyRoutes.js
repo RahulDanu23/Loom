@@ -22,31 +22,23 @@ const validateRegistration = [
 ];
 
 const validateLogin = [
-  body('facultyId').notEmpty().withMessage('Faculty ID is required'),
+  body('email').isEmail().withMessage('Please include a valid email'),
   body('password').exists().withMessage('Password is required')
 ];
 
 // Register Faculty
-router.post('/register', async (req, res) => {
+router.post('/register', validateRegistration, async (req, res) => {
   try {
-    const { fullName, email, facultyId, password, department } = req.body;
-
-    // Input validation
-    if (!fullName || !email || !facultyId || !password || !department) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'All fields are required' 
-      });
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid email format'
+        message: errors.array()[0].msg
       });
     }
+
+    const { fullName, email, facultyId, password, department } = req.body;
 
     // Check if faculty exists
     let faculty = await Faculty.findOne({ $or: [{ email }, { facultyId }] });
@@ -90,6 +82,14 @@ router.post('/register', async (req, res) => {
         res.status(201).json({ 
           success: true,
           token,
+          user: {
+            id: faculty.id,
+            fullName: faculty.fullName,
+            email: faculty.email,
+            facultyId: faculty.facultyId,
+            department: faculty.department,
+            role: 'faculty'
+          },
           message: 'Registration successful'
         });
       }
@@ -104,20 +104,21 @@ router.post('/register', async (req, res) => {
 });
 
 // Login Faculty
-router.post('/login', async (req, res) => {
+router.post('/login', validateLogin, async (req, res) => {
   try {
-    const { facultyId, password } = req.body;
-
-    // Input validation
-    if (!facultyId || !password) {
-      return res.status(400).json({ 
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
         success: false,
-        message: 'Please provide faculty ID and password' 
+        message: errors.array()[0].msg
       });
     }
 
+    const { email, password } = req.body;
+
     // Check if faculty exists
-    const faculty = await Faculty.findOne({ facultyId }).select('+password');
+    const faculty = await Faculty.findOne({ email }).select('+password');
     if (!faculty) {
       return res.status(400).json({ 
         success: false,
@@ -125,14 +126,26 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Check if faculty is active
+    if (!faculty.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact the administrator.'
+      });
+    }
+
     // Check password
-    const isMatch = await bcrypt.compare(password, faculty.password);
+    const isMatch = await faculty.matchPassword(password);
     if (!isMatch) {
       return res.status(400).json({ 
         success: false,
         message: 'Invalid credentials' 
       });
     }
+
+    // Update last login
+    faculty.lastLogin = new Date();
+    await faculty.save({ validateBeforeSave: false });
 
     // Create JWT token
     const payload = {
@@ -151,6 +164,14 @@ router.post('/login', async (req, res) => {
         res.json({ 
           success: true,
           token,
+          user: {
+            id: faculty.id,
+            fullName: faculty.fullName,
+            email: faculty.email,
+            facultyId: faculty.facultyId,
+            department: faculty.department,
+            role: 'faculty'
+          },
           message: 'Login successful'
         });
       }
@@ -176,7 +197,7 @@ router.get('/profile', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const faculty = await Faculty.findById(decoded.user.id).select('-password');
+    const faculty = await Faculty.findById(decoded.user.id);
     
     if (!faculty) {
       return res.status(404).json({
@@ -187,7 +208,16 @@ router.get('/profile', async (req, res) => {
 
     res.json({
       success: true,
-      data: faculty
+      data: {
+        id: faculty.id,
+        fullName: faculty.fullName,
+        email: faculty.email,
+        facultyId: faculty.facultyId,
+        department: faculty.department,
+        lastLogin: faculty.lastLogin,
+        isActive: faculty.isActive,
+        createdAt: faculty.createdAt
+      }
     });
   } catch (error) {
     console.error('Profile fetch error:', error);

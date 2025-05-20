@@ -1,16 +1,14 @@
-import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
 const ProtectedRoute = ({ redirectPath = '/student-login' }) => {
-  // Check if user is authenticated by verifying token in localStorage
-  const isAuthenticated = localStorage.getItem('authToken');
+  const location = useLocation();
+  const token = localStorage.getItem('token');
   
-  // If no token is found, redirect to login page
-  if (!isAuthenticated) {
-    return <Navigate to={redirectPath} replace />;
+  if (!token) {
+    // Redirect to login page with the return url
+    return <Navigate to={redirectPath} state={{ from: location }} replace />;
   }
-
-  // If the user is authenticated, render the child routes
+  
   return <Outlet />;
 };
 
