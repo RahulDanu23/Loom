@@ -1,12 +1,12 @@
 import express from 'express';
 import { createQuiz, getFacultyQuizzes, getQuizById, deleteQuiz } from '../controller/quizController.js';
-import { authenticate } from '../middleware/authMiddleware.js';
+import { auth } from '../middleware/auth.js';
 import Quiz from '../models/Quiz.js';
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(auth);
 
 // POST /api/quizzes - Create a new quiz
 router.post('/', createQuiz);

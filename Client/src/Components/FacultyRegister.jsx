@@ -7,6 +7,64 @@ import {
   FaEye, FaEyeSlash, FaBuilding 
 } from 'react-icons/fa';
 
+const InputField = ({ 
+  icon, 
+  type, 
+  name, 
+  placeholder, 
+  value, 
+  onChange, 
+  required = true, 
+  options, 
+  isPassword = false, 
+  fieldName,
+  showPassword,
+  togglePasswordVisibility 
+}) => (
+  <div className="relative">
+    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+      {icon}
+    </div>
+    {type === 'select' ? (
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        required={required}
+        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 appearance-none"
+      >
+        <option value="">{placeholder}</option>
+        {options.map(option => (
+          <option key={option} value={option}>
+            {option.charAt(0).toUpperCase() + option.slice(1)}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <div className="relative">
+        <input
+          type={isPassword ? (showPassword[fieldName] ? 'text' : 'password') : type}
+          name={name}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required={required}
+          className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => togglePasswordVisibility(fieldName)}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
+          >
+            {showPassword[fieldName] ? <FaEyeSlash /> : <FaEye />}
+          </button>
+        )}
+      </div>
+    )}
+  </div>
+);
+
 const FacultyRegister = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -68,57 +126,20 @@ const FacultyRegister = () => {
     }
   };
 
-  const InputField = ({ icon, type, name, placeholder, value, onChange, required = true, options, isPassword = false, fieldName }) => (
-    <div className="relative">
-      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        {icon}
-      </div>
-      {type === 'select' ? (
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          required={required}
-          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 appearance-none"
-        >
-          <option value="">{placeholder}</option>
-          {options.map(option => (
-            <option key={option} value={option}>
-              {option.charAt(0).toUpperCase() + option.slice(1)}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <div className="relative">
-          <input
-            type={isPassword ? (showPassword[fieldName] ? 'text' : 'password') : type}
-            name={name}
-            placeholder={placeholder}
-            value={value}
-            onChange={onChange}
-            required={required}
-            className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
-          />
-          {isPassword && (
-            <button
-              type="button"
-              onClick={() => togglePasswordVisibility(fieldName)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
-            >
-              {showPassword[fieldName] ? <FaEyeSlash /> : <FaEye />}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-2xl">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center relative">
+            <Link to="/" className="absolute left-4 top-4">
+              <button
+                type="button"
+                className="p-2 rounded-full bg-white text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200"
+              >
+                ←
+              </button>
+            </Link>
             <div className="flex justify-center mb-4">
               <div className="bg-white p-3 rounded-full">
                 <FaUserTie className="w-8 h-8 text-indigo-600" />
@@ -131,7 +152,7 @@ const FacultyRegister = () => {
           {/* Form */}
           <div className="p-8">
             {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
                 {error}
               </div>
             )}
@@ -146,6 +167,8 @@ const FacultyRegister = () => {
                   placeholder="Full Name"
                   value={formData.fullName}
                   onChange={handleChange}
+                  showPassword={showPassword}
+                  togglePasswordVisibility={togglePasswordVisibility}
                 />
 
                 {/* Email */}
@@ -156,6 +179,8 @@ const FacultyRegister = () => {
                   placeholder="Email Address"
                   value={formData.email}
                   onChange={handleChange}
+                  showPassword={showPassword}
+                  togglePasswordVisibility={togglePasswordVisibility}
                 />
 
                 {/* Faculty ID */}
@@ -166,6 +191,8 @@ const FacultyRegister = () => {
                   placeholder="Faculty ID"
                   value={formData.facultyId}
                   onChange={handleChange}
+                  showPassword={showPassword}
+                  togglePasswordVisibility={togglePasswordVisibility}
                 />
 
                 {/* Department */}
@@ -177,6 +204,8 @@ const FacultyRegister = () => {
                   value={formData.department}
                   onChange={handleChange}
                   options={departments}
+                  showPassword={showPassword}
+                  togglePasswordVisibility={togglePasswordVisibility}
                 />
 
                 {/* Password */}
@@ -189,6 +218,8 @@ const FacultyRegister = () => {
                   onChange={handleChange}
                   isPassword={true}
                   fieldName="password"
+                  showPassword={showPassword}
+                  togglePasswordVisibility={togglePasswordVisibility}
                 />
 
                 {/* Confirm Password */}
@@ -201,6 +232,8 @@ const FacultyRegister = () => {
                   onChange={handleChange}
                   isPassword={true}
                   fieldName="confirmPassword"
+                  showPassword={showPassword}
+                  togglePasswordVisibility={togglePasswordVisibility}
                 />
               </div>
 

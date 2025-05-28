@@ -18,10 +18,34 @@ const StudentLogin = () => {
   
   // Check if user is already logged in
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      navigate('/student-dashboard');
-    }
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // Validate token with the server
+          const response = await axios.get('http://localhost:5000/api/students/verify-token', {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          if (response.data.valid) {
+            navigate('/student-dashboard');
+          } else {
+            // Token is invalid, remove it
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
+        } catch (error) {
+          // Token validation failed, clear storage
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          console.error('Token validation error:', error);
+        }
+      }
+    };
+    
+    checkAuthStatus();
   }, [navigate]);
 
   const { email, password } = formData;
@@ -54,10 +78,13 @@ const StudentLogin = () => {
     }
     
     try {
+      console.log('Attempting login with:', { email });
       const response = await axios.post('http://localhost:5000/api/students/login', {
         email,
         password
       });
+      
+      console.log('Login response:', response.data);
       
       if (!response.data.success) {
         throw new Error(response.data.message || 'Login failed');
@@ -74,9 +101,13 @@ const StudentLogin = () => {
       
       toast.success('Login successful! Redirecting to dashboard...');
       
-      // Redirect to dashboard or the page they were trying to access
-      const redirectTo = location.state?.from?.pathname || '/student-dashboard';
-      navigate(redirectTo);
+      // Add a short delay before navigation to ensure toast is visible
+      setTimeout(() => {
+        // Redirect to dashboard or the page they were trying to access
+        const redirectTo = location.state?.from?.pathname || '/student-dashboard';
+        console.log('Redirecting to:', redirectTo);
+        navigate(redirectTo);
+      }, 1000);
     } catch (error) {
       console.error('Login error:', error);
       
@@ -103,7 +134,15 @@ const StudentLogin = () => {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center relative">
+            <Link to="/" className="absolute left-4 top-4">
+              <button
+                type="button"
+                className="p-2 rounded-full bg-white text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200"
+              >
+                ←
+              </button>
+            </Link>
             <div className="flex justify-center mb-4">
               <div className="bg-white p-3 rounded-full">
                 <FaUserGraduate className="w-8 h-8 text-indigo-600" />

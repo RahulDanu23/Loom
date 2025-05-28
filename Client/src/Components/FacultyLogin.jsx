@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -12,6 +12,36 @@ const FacultyLogin = () => {
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Check if faculty is already logged in
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('facultyToken');
+      if (token) {
+        try {
+          // Validate token with the server
+          const response = await axios.get('http://localhost:5000/api/faculty/verify-token', {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          if (response.data.valid) {
+            navigate('/faculty-dashboard');
+          } else {
+            // Token is invalid, remove it
+            localStorage.removeItem('facultyToken');
+          }
+        } catch (error) {
+          // Token validation failed, clear storage
+          localStorage.removeItem('facultyToken');
+          console.error('Token validation error:', error);
+        }
+      }
+    };
+    
+    checkAuthStatus();
+  }, [navigate]);
 
   const { email, password } = formData;
 
@@ -30,18 +60,27 @@ const FacultyLogin = () => {
     setLoading(true);
     
     try {
+      console.log('Attempting faculty login with:', { email });
       const response = await axios.post('http://localhost:5000/api/faculty/login', {
         email,
         password
       });
+      
+      console.log('Faculty login response:', response.data);
       
       // Save token to localStorage
       localStorage.setItem('facultyToken', response.data.token);
       
       // Redirect to faculty dashboard
       toast.success('Login successful!');
-      navigate('/faculty-dashboard');
+      
+      // Add a short delay before navigation to ensure toast is visible and token is stored
+      setTimeout(() => {
+        console.log('Redirecting to faculty dashboard...');
+        navigate('/faculty-dashboard');
+      }, 1000);
     } catch (error) {
+      console.error('Faculty login error:', error);
       const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
       toast.error(errorMessage);
     } finally {
@@ -54,7 +93,15 @@ const FacultyLogin = () => {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center relative">
+            <Link to="/" className="absolute left-4 top-4">
+              <button
+                type="button"
+                className="p-2 rounded-full bg-white text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200"
+              >
+                ←
+              </button>
+            </Link>
             <div className="flex justify-center mb-4">
               <div className="bg-white p-3 rounded-full">
                 <FaUserTie className="w-8 h-8 text-indigo-600" />

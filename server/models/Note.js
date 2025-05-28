@@ -33,6 +33,22 @@ const noteSchema = new mongoose.Schema({
     required: [true, 'Department is required'],
     enum: ['core', 'aiml', 'cyber', 'aids']
   },
+  departmentType: {
+    type: String,
+    required: [true, 'Department type is required'],
+    enum: ['core', 'aiml', 'cyber', 'aids']
+  },
+  semester: {
+    type: Number,
+    required: [true, 'Semester is required'],
+    min: 1,
+    max: 10
+  },
+  subject: {
+    type: String,
+    required: [true, 'Subject is required'],
+    trim: true
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Faculty',
@@ -43,6 +59,11 @@ const noteSchema = new mongoose.Schema({
     default: Date.now
   }
 }, { timestamps: true });
+
+// Create indexes for faster queries
+noteSchema.index({ departmentType: 1, semester: 1, subject: 1 });
+noteSchema.index({ department: 1, semester: 1, subject: 1 });
+noteSchema.index({ uploadedBy: 1 });
 
 const Note = mongoose.model('Note', noteSchema);
 

@@ -1,15 +1,13 @@
-import React, { useState, useCallback, useRef, memo } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { FaLock } from 'react-icons/fa';
 import { 
   FaUser, FaEnvelope, FaUsers, FaHashtag, 
-  FaEye, FaEyeSlash, FaUserGraduate, FaBookOpen, FaLayerGroup 
+  FaEye, FaEyeSlash, FaUserGraduate, FaBookOpen, FaLayerGroup, FaLock 
 } from 'react-icons/fa';
 
-// Memoized InputField component to prevent unnecessary re-renders
-const InputField = memo(({ 
+const InputField = ({ 
   icon, type, name, placeholder, value, onChange, 
   required = true, options, isPassword = false, fieldName, showPassword, onTogglePassword 
 }) => {
@@ -64,7 +62,7 @@ const InputField = memo(({
       )}
     </div>
   );
-});
+};
 
 const StudentRegister = () => {
   const navigate = useNavigate();
@@ -91,16 +89,14 @@ const StudentRegister = () => {
   const [error, setError] = useState('');
 
   const departments = [
-    { value: 'cse', label: 'Computer Science (CSE)' },
-    { value: 'it', label: 'Information Technology (IT)' },
-    { value: 'ece', label: 'Electronics & Communication (ECE)' },
-    { value: 'eee', label: 'Electrical & Electronics (EEE)' },
-    { value: 'mech', label: 'Mechanical (MECH)' },
-    { value: 'civil', label: 'Civil (CIVIL)' }
+    { value: 'core', label: 'B.Tech Computer Science (Core)' },
+    { value: 'aiml', label: 'B.Tech Computer Science (AI & ML)' },
+    { value: 'cyber', label: 'B.Tech Computer Science (Cybersecurity)' },
+    { value: 'aids', label: 'B.Tech Computer Science (AI & Data Science)' }
   ];
 
   const semesters = Array.from({ length: 10 }, (_, i) => (i + 1).toString());
-  const sections = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const sections = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'D1', 'D2', 'E1', 'E2', 'F1', 'F2', 'G1', 'G2', 'H1', 'H2', 'I1', 'I2', 'J1', 'J2', 'K1', 'K2', 'L1', 'L2', 'M1', 'M2', 'N1', 'N2'];
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -120,77 +116,44 @@ const StudentRegister = () => {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
-
+    
+    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-
-    // Validate required fields
-    const requiredFields = ['fullName', 'email', 'semester', 'department', 'section', 'universityRoll', 'classRoll', 'password'];
-    const missingFields = requiredFields.filter(field => !formData[field]);
     
-    if (missingFields.length > 0) {
-      setError(`Please fill in all required fields: ${missingFields.join(', ')}`);
-      return;
-    }
-
     setLoading(true);
+    
     try {
-      const requestData = {
-        name: formData.fullName.trim(),
-        email: formData.email.trim().toLowerCase(),
+      console.log('Submitting registration data...');
+      const response = await axios.post('http://localhost:5000/api/students/register', {
+        name: formData.fullName,
+        email: formData.email,
+        universityRollNo: formData.universityRoll,
+        classRollNo: formData.classRoll,
+        section: formData.section,
         semester: formData.semester,
         department: formData.department,
-        section: formData.section,
-        universityRollNo: formData.universityRoll.trim(),
-        classRollNo: formData.classRoll.trim(),
         password: formData.password
-      };
-
-      console.log('Final request data being sent:', JSON.stringify(requestData, null, 2));
-
-      const response = await axios.post(
-        'http://localhost:5000/api/students/register',
-        requestData,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          validateStatus: (status) => status < 500, // Reject only if status is 500 or higher
-        }
-      );
-
+      });
+      
       console.log('Registration response:', response.data);
-
+      
       if (response.data.success) {
-        toast.success('Registration successful! Please login.');
-        navigate('/student-login');
+        toast.success('Registration successful! Redirecting to login page...');
+        
+        // Add a delay before redirection to ensure the toast is visible
+        setTimeout(() => {
+          navigate('/student-login');
+        }, 1500);
       } else {
         throw new Error(response.data.message || 'Registration failed');
       }
     } catch (error) {
-      console.error('Registration error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          data: error.config?.data
-        }
-      });
-
-      let errorMessage = 'Registration failed. Please try again.';
-      
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setError(errorMessage);
-      toast.error(errorMessage);
+      console.error('Registration error:', error);
+      setError(error.response?.data?.message || 'Registration failed. Please try again.');
+      toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -201,7 +164,15 @@ const StudentRegister = () => {
       <div className="w-full max-w-4xl">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center relative">
+            <Link to="/" className="absolute left-4 top-4">
+              <button
+                type="button"
+                className="p-2 rounded-full bg-white text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200"
+              >
+                ←
+              </button>
+            </Link>
             <div className="flex justify-center mb-4">
               <div className="bg-white p-3 rounded-full">
                 <FaUserGraduate className="w-8 h-8 text-indigo-600" />

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import Student from '../models/Student.js';
-import { auth } from '../middleware/auth.js';
+import { auth, isLoggedIn, restrictTo } from '../middleware/auth.js';
 
 dotenv.config();
 const router = express.Router();
@@ -299,6 +299,20 @@ router.get('/profile', auth, async (req, res) => {
       message: 'Server error' 
     });
   }
+});
+
+// Verify token validity
+router.get('/verify-token', auth, (req, res) => {
+  // If auth middleware passes, the token is valid
+  res.json({
+    valid: true,
+    user: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: 'student'
+    }
+  });
 });
 
 export default router;

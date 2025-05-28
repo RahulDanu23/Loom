@@ -5,12 +5,13 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import connectDB from './config/mongodb.js';
-import noteRoutes from './routes/noteRoutes.js';
+import noteRoutes from './routes/notes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import facultyRoutes from './routes/facultyRoutes.js';
 import sendEmail from './config/nodemailer.js';
 import authRouter from './routes/authRoutes.js';
+import router from './routes/notes.js';
 
 dotenv.config();
 

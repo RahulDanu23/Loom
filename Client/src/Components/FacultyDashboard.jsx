@@ -22,7 +22,7 @@ const FacultyDashboard = () => {
     file: null
   });
 
-  // Initialize with mock data
+  // Initialize with data 
   useEffect(() => {
     setDepartments([{ id: 'btech', name: 'B.Tech' }]);
     
@@ -68,11 +68,60 @@ const FacultyDashboard = () => {
       { id: 'daa-aids', name: 'Design Analysis and Algorithms(DAA)', type: 'aids' },
       { id: 'sa', name: 'Statistical Analysis', type: 'aids' }
     ]);
-
-    // Load existing notes from localStorage
-    const existingNotes = JSON.parse(localStorage.getItem('notes') || '[]');
-    setNotes(existingNotes);
   }, []);
+  
+  // Load faculty notes on component mount and whenever notes should be refreshed
+  useEffect(() => {
+    loadFacultyNotes();
+  }, []);
+  
+  // Function to load faculty notes from the server
+  const loadFacultyNotes = async () => {
+    try {
+      const token = localStorage.getItem('facultyToken');
+      if (!token) {
+        console.log('No faculty token found, redirecting to login');
+        navigate('/faculty-login');
+        return;
+      }
+      
+      console.log('Loading faculty notes from server...');
+      const response = await axios.get('http://localhost:5000/api/notes/faculty', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        // Add timestamp to prevent caching
+        params: {
+          timestamp: new Date().getTime()
+        }
+      });
+      
+      console.log('Faculty notes response:', response.data);
+      
+      if (response.data && (response.data.notes || Array.isArray(response.data))) {
+        // Handle different response formats
+        const notesData = response.data.notes || response.data;
+        setNotes(notesData);
+        console.log(`Successfully loaded ${notesData.length} faculty notes`);
+      } else {
+        console.warn('No notes found or invalid response format');
+        setNotes([]);
+      }
+    } catch (error) {
+      console.error('Error loading faculty notes:', error);
+      if (error.response?.status === 401) {
+        // Token might be expired
+        localStorage.removeItem('facultyToken');
+        console.log('Session expired, redirecting to login');
+        navigate('/faculty-login');
+      } else {
+        // Log the error and show an alert to the user
+        console.log('Note loading error:', error.message);
+        alert('Error loading notes. Please try the reload button below.');
+        setNotes([]);
+      }
+    }
+  };
 
   // Filter subjects based on department type
   useEffect(() => {
@@ -131,58 +180,166 @@ const FacultyDashboard = () => {
     e.preventDefault();
     
     try {
-      const base64File = await fileToBase64(formData.file);
+      // Validate form data
+      if (!formData.departmentType || !formData.semester || !formData.subject || !formData.topic || !formData.file) {
+        alert('Please fill in all fields and select a file');
+        return;
+      }
       
-      const newNote = {
-        id: Date.now(),
-        departmentType: formData.departmentType,
-        semester: formData.semester,
-        subject: formData.subject,
-        topic: formData.topic,
-        fileName: formData.file.name,
-        fileSize: formData.file.size,
-        uploadDate: new Date().toISOString(),
-        fileType: formData.file.type
-      };
-
-      const updatedNotes = [...notes, newNote];
-      setNotes(updatedNotes);
-      localStorage.setItem('notes', JSON.stringify(updatedNotes));
-      localStorage.setItem(`note_file_${newNote.id}`, base64File);
-
-      // Reset form
-      setFormData({
-        department: '',
-        semester: '',
-        departmentType: '',
-        subject: '',
-        topic: '',
-        file: null
+      // Create form data for file upload
+      const noteData = new FormData();
+      noteData.append('department', formData.departmentType); // Use departmentType as department
+      noteData.append('departmentType', formData.departmentType);
+      noteData.append('semester', formData.semester);
+      noteData.append('subject', formData.subject);
+      noteData.append('topic', formData.topic);
+      noteData.append('file', formData.file);
+      
+      // Get faculty token
+      const token = localStorage.getItem('facultyToken');
+      if (!token) {
+        alert('You must be logged in to upload notes');
+        navigate('/faculty-login');
+        return;
+      }
+      
+      // Upload to server
+      const response = await axios.post('http://localhost:5000/api/notes/upload', noteData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
       });
       
-      // Reset file input
-      document.getElementById('file').value = '';
+      console.log('Note upload response:', response.data);
       
-      alert('Notes uploaded successfully!');
+      if (response.data.success || response.status === 201) {
+        // Add the new note to the local state
+        const newNote = response.data.note || {
+          id: Date.now(),
+          departmentType: formData.departmentType,
+          department: formData.departmentType,
+          semester: formData.semester,
+          subject: formData.subject,
+          topic: formData.topic,
+          fileName: formData.file.name,
+          fileSize: formData.file.size,
+          uploadDate: new Date().toISOString(),
+          fileType: formData.file.type
+        };
+        
+        const updatedNotes = [...notes, newNote];
+        setNotes(updatedNotes);
+        
+        // Reset form
+        setFormData({
+          department: '',
+          semester: '',
+          departmentType: '',
+          subject: '',
+          topic: '',
+          file: null
+        });
+        
+        // Reset file input
+        document.getElementById('file').value = '';
+        
+        alert('Notes uploaded successfully to server!');
+      } else {
+        throw new Error('Server responded but the upload may have failed');
+      }
     } catch (error) {
-      console.error('Error uploading note:', error);
-      alert('Error uploading note. Please try again.');
+      console.error('Error uploading note to server:', error);
+      // Log specific AxiosError details for better debugging
+      if (error.response) {
+        console.error('Server Response:', error.response.data);
+        console.error('Status Code:', error.response.status);
+        alert(`Error uploading note: ${error.response.data.message || error.response.statusText}`);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+        alert('Error: No response received from server. Please check your connection.');
+      } else {
+        console.error('Error setting up request:', error.message);
+        alert(`Error uploading note: ${error.message}`);
+      }
     }
   };
 
-  const deleteNote = (noteId) => {
+  const deleteNote = async (noteId) => {
     if (!window.confirm('Are you sure you want to delete this note? This action cannot be undone.')) {
       return;
     }
 
     try {
-      const updatedNotes = notes.filter(note => note.id !== noteId);
-      setNotes(updatedNotes);
-      localStorage.setItem('notes', JSON.stringify(updatedNotes));
-      localStorage.removeItem(`note_file_${noteId}`);
+      console.log('Attempting to delete note with ID:', noteId);
+      
+      // First, find the full note object to get the correct MongoDB _id
+      const noteToDelete = notes.find(note => {
+        console.log('Comparing:', note.id, note._id, 'with', noteId);
+        return note.id === noteId || note._id === noteId;
+      });
+      
+      if (!noteToDelete) {
+        console.error('Note not found in current state:', noteId);
+        alert('Could not find the note to delete. Please refresh the page and try again.');
+        return;
+      }
+      
+      // Use MongoDB _id for the API call if available
+      const idForApi = noteToDelete._id || noteId;
+      console.log('Using ID for API call:', idForApi);
+      
+      const token = localStorage.getItem('facultyToken');
+      if (!token) {
+        alert('You must be logged in to delete notes');
+        navigate('/faculty-login');
+        return;
+      }
+      
+      // Make API call to delete the note from the server
+      const response = await axios.delete(`http://localhost:5000/api/notes/${idForApi}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log('Note deletion response:', response.data);
+      
+      if (response.status === 200) {
+        // Update local state before refreshing from server
+        const updatedNotes = notes.filter(note => {
+          return (note.id !== noteId && note._id !== noteId && note._id !== idForApi);
+        });
+        setNotes(updatedNotes);
+        alert('Note deleted successfully!');
+        
+        // Refresh the notes list from server to ensure synchronization
+        setTimeout(() => {
+          loadFacultyNotes();
+        }, 500); // Small delay to ensure server has completed the deletion
+      } else {
+        throw new Error('Failed to delete note on server');
+      }
     } catch (error) {
       console.error('Error deleting note:', error);
-      alert('Error deleting note. Please try again.');
+      
+      // Provide detailed error feedback
+      if (error.response) {
+        console.error('Server Response:', error.response.data);
+        console.error('Status Code:', error.response.status);
+        alert(`Error deleting note: ${error.response.data?.message || error.response.statusText || 'Unknown server error'}`);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+        alert('Error: No response received from server. Please check your connection.');
+      } else {
+        console.error('Error setting up request:', error.message);
+        alert(`Error deleting note: ${error.message}`);
+      }
+      
+      // Refresh notes from server anyway to ensure UI is in sync
+      setTimeout(() => {
+        loadFacultyNotes();
+      }, 1000);
     }
   };
 
@@ -307,8 +464,7 @@ const FacultyDashboard = () => {
                       <option key={dept.id} value={dept.id}>{dept.name}</option>
                     ))}
                   </select>
-                </div>                npm run dev
-                
+                </div>            
                 <div className="mb-5">
                   <label className="block text-blue-500 mb-2">Semester</label>
                   <select 
@@ -396,7 +552,18 @@ const FacultyDashboard = () => {
             </div>
             
             <div className="mt-8 max-w-4xl mx-auto">
-              <h3 className="text-xl font-semibold text-gray-700 mb-4">Uploaded Notes</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-700">Uploaded Notes</h3>
+                <button 
+                  onClick={loadFacultyNotes}
+                  className="flex items-center justify-center p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Reload Notes
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {notes.length === 0 ? (
                   <div className="col-span-full text-center py-8 text-gray-500">
@@ -431,7 +598,7 @@ const FacultyDashboard = () => {
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {formatDate(note.uploadDate)}
+                          {note.uploadDate ? formatDate(note.uploadDate) : 'No date available'}
                         </p>
                       </div>
                       <div className="flex space-x-2">
