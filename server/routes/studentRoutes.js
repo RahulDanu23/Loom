@@ -315,4 +315,26 @@ router.get('/verify-token', auth, (req, res) => {
   });
 });
 
+// Update student profile (section and semester)
+router.put('/profile', auth, async (req, res) => {
+  try {
+    const { section, semester } = req.body;
+    if (!section || !semester) {
+      return res.status(400).json({ success: false, message: 'Section and semester are required' });
+    }
+    const updated = await Student.findByIdAndUpdate(
+      req.user.id,
+      { section, semester },
+      { new: true, runValidators: true }
+    ).select('-password');
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    console.error('Error updating profile:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 export default router;

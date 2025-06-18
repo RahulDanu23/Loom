@@ -12,6 +12,7 @@ import facultyRoutes from './routes/facultyRoutes.js';
 import sendEmail from './config/nodemailer.js';
 import authRouter from './routes/authRoutes.js';
 import router from './routes/notes.js';
+import feedbackRoutes from './routes/feedbackRoutes.js';
 
 dotenv.config();
 
@@ -66,6 +67,7 @@ app.use('/api/notes', noteRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/faculty', facultyRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Error Handling Middleware
 app.use((req, res) => {

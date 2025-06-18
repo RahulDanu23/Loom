@@ -11,6 +11,10 @@ const FacultyDashboard = () => {
   const [subjects, setSubjects] = useState([]);
   const [filteredSubjects, setFilteredSubjects] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [facultyProfile, setFacultyProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [feedback, setFeedback] = useState([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -75,6 +79,65 @@ const FacultyDashboard = () => {
     loadFacultyNotes();
   }, []);
   
+  // Load faculty profile when profile tab is active
+  useEffect(() => {
+    if (activeTab === 'profile') {
+      loadFacultyProfile();
+    }
+  }, [activeTab]);
+  
+  // Fetch feedback for faculty when feedback tab is active
+  useEffect(() => {
+    if (activeTab === 'feedback') {
+      fetchFeedback();
+    }
+  }, [activeTab]);
+  
+  // Function to load faculty profile from the server
+  const loadFacultyProfile = async () => {
+    try {
+      const token = localStorage.getItem('facultyToken');
+      if (!token) {
+        console.log('No faculty token found, redirecting to login');
+        navigate('/faculty-login');
+        return;
+      }
+      
+      setProfileLoading(true);
+      console.log('Loading faculty profile from server...');
+      const response = await axios.get('http://localhost:5000/api/faculty/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log('Faculty profile response:', response.data);
+      
+      if (response.data && response.data.success) {
+        setFacultyProfile(response.data.data);
+        console.log('Successfully loaded faculty profile');
+      } else {
+        console.warn('No profile data found or invalid response format');
+        setFacultyProfile(null);
+      }
+    } catch (error) {
+      console.error('Error loading faculty profile:', error);
+      if (error.response?.status === 401) {
+        // Token might be expired
+        localStorage.removeItem('facultyToken');
+        console.log('Session expired, redirecting to login');
+        navigate('/faculty-login');
+      } else {
+        // Log the error and show an alert to the user
+        console.log('Profile loading error:', error.message);
+        alert('Error loading profile. Please try again.');
+        setFacultyProfile(null);
+      }
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+  
   // Function to load faculty notes from the server
   const loadFacultyNotes = async () => {
     try {
@@ -123,6 +186,22 @@ const FacultyDashboard = () => {
     }
   };
 
+  const fetchFeedback = async () => {
+    setFeedbackLoading(true);
+    try {
+      const token = localStorage.getItem('facultyToken');
+      const res = await axios.get('http://localhost:5000/api/feedback/faculty', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setFeedback(res.data.feedback);
+    } catch (err) {
+      console.error('Error loading feedback:', err);
+      setFeedback([]);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
   // Filter subjects based on department type
   useEffect(() => {
     if (formData.departmentType) {
@@ -166,14 +245,25 @@ const FacultyDashboard = () => {
   };
 
   const formatDate = (dateString) => {
-    const options = { 
-      year: 'numeric', 
-      month: 'short', 
+    if (!dateString) return 'No date available';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  const formatDepartment = (department) => {
+    const departmentMap = {
+      'core': 'Core',
+      'aiml': 'AI-ML',
+      'cyber': 'Cyber Security',
+      'aids': 'AI-DS'
     };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    return departmentMap[department] || department;
   };
 
   const handleSubmit = async (e) => {
@@ -583,7 +673,7 @@ const FacultyDashboard = () => {
                           </span>
                         </div>
                         <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
-                          {note.departmentType.toUpperCase()}
+                          {formatDepartment(note.departmentType)}
                         </span>
                       </div>
                       <h5 className="text-gray-700 mb-2">{note.topic}</h5>
@@ -645,7 +735,26 @@ const FacultyDashboard = () => {
           <div className="p-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Student Feedback</h2>
             <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-              <p className="text-center text-gray-500">Student feedback will be displayed here.</p>
+              {feedbackLoading ? (
+                <p className="text-center text-gray-500">Loading feedback...</p>
+              ) : feedback.length === 0 ? (
+                <p className="text-center text-gray-500">No feedback submitted yet.</p>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {feedback.map(fb => (
+                    <li key={fb._id} className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-semibold text-blue-700">{fb.student?.name || 'Unknown Student'}</span>
+                          <span className="ml-2 text-xs text-gray-500">{fb.student?.email}</span>
+                        </div>
+                        <span className="text-xs text-gray-400">{new Date(fb.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div className="mt-2 text-gray-800">{fb.message}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         )}
@@ -654,7 +763,103 @@ const FacultyDashboard = () => {
           <div className="p-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Faculty Profile</h2>
             <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-              <p className="text-center text-gray-500">Faculty profile information will be displayed here.</p>
+              {profileLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Loading profile information...</p>
+                </div>
+              ) : facultyProfile ? (
+                <div className="space-y-6">
+                  {/* Profile Header */}
+                  <div className="text-center border-b border-gray-200 pb-6">
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800">{facultyProfile.fullName}</h3>
+                    <p className="text-gray-600">{facultyProfile.email}</p>
+                  </div>
+
+                  {/* Profile Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Faculty ID</label>
+                        <p className="text-gray-800 font-medium">{facultyProfile.facultyId}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Department</label>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                          {formatDepartment(facultyProfile.department)}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Account Status</label>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                          facultyProfile.isActive 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {facultyProfile.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Last Login</label>
+                        <p className="text-gray-800">{formatDate(facultyProfile.lastLogin)}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Member Since</label>
+                        <p className="text-gray-800">{formatDate(facultyProfile.createdAt)}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Account ID</label>
+                        <p className="text-gray-800 font-mono text-sm">{facultyProfile.id}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="border-t border-gray-200 pt-6">
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button 
+                        onClick={loadFacultyProfile}
+                        className="flex-1 flex items-center justify-center px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh Profile
+                      </button>
+                      <button 
+                        onClick={handleLogout}
+                        className="flex-1 flex items-center justify-center px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <p className="text-gray-500 mb-4">Failed to load profile information</p>
+                  <button 
+                    onClick={loadFacultyProfile}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

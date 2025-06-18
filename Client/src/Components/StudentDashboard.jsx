@@ -35,6 +35,14 @@ const StudentDashboard = () => {
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizResult, setQuizResult] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ section: '', semester: '' });
+
+  const sectionOptions = [
+    'A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'D1', 'D2', 'E1', 'E2', 'F1', 'F2',
+    'G1', 'G2', 'H1', 'H2', 'I1', 'I2', 'J1', 'J2', 'K1', 'K2', 'L1', 'L2',
+    'M1', 'M2', 'N1', 'N2'
+  ];
 
   // Set up axios with authentication token
   useEffect(() => {
@@ -114,6 +122,9 @@ const StudentDashboard = () => {
           subject: '' // Leave subject empty initially, user must select
         });
         
+        // Load feedback on initial load
+        await loadFeedback();
+        
         // Don't load notes initially - wait for user to select subject and apply filters
         console.log('Initial profile loaded. User must select subject to load notes.');
         
@@ -136,15 +147,23 @@ const StudentDashboard = () => {
     loadInitialData();
   }, [navigate]);
 
+  // Load feedback when feedback section is accessed
+  useEffect(() => {
+    if (activeSection === 'feedback') {
+      loadFeedback();
+    }
+  }, [activeSection]);
+
   const loadProfile = async () => {
     try {
-      const res = await axios.get('/api/students/me');
-      setStudent(res.data.data);
+      const res = await axios.get('http://localhost:5000/api/students/me');
+      const studentData = res.data.user || res.data.data;
+      setStudent(studentData);
       setProfileForm({
-        name: res.data.data.name,
-        email: res.data.data.email,
-        section: res.data.data.section,
-        semester: res.data.data.semester
+        name: studentData.name,
+        email: studentData.email,
+        section: studentData.section,
+        semester: studentData.semester
       });
     } catch (err) {
       console.error('Error loading profile:', err);
@@ -256,32 +275,19 @@ const StudentDashboard = () => {
 
   const loadFeedback = async () => {
     try {
-      const res = await axios.get('/api/feedback/student');
+      const token = localStorage.getItem('token');
+      console.log('Loading feedback with token:', token ? 'Token exists' : 'No token');
       
-      setFeedback(res.data);
+      const res = await axios.get('http://localhost:5000/api/feedback/my-feedback', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      console.log('Feedback API response:', res.data);
+      setFeedback(Array.isArray(res.data.feedback) ? res.data.feedback : []);
     } catch (err) {
       console.error('Error loading feedback:', err);
-      
-      if (err.response?.status === 401) {
-        // Instead of immediately logging out, first try to refresh the token
-        console.log('Authentication error when loading feedback. Attempting to recover...');
-        
-        // Check if token exists but might be invalid
-        const token = localStorage.getItem('token');
-        if (token) {
-          // Set the token again in case it wasn't properly applied
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
-          // Show a warning instead of logging out immediately
-          toast.warning('Having trouble loading feedback. Please refresh the page if this persists.');
-        } else {
-          // Only logout if no token exists at all
-          toast.error('Your session has expired. Please log in again.');
-          navigate('/student-login');
-        }
-      } else {
-        toast.error('Failed to load feedback. Please try again later.');
-      }
+      console.error('Error response:', err.response?.data);
+      setFeedback([]);
     }
   };
 
@@ -351,7 +357,10 @@ const StudentDashboard = () => {
 
   const handleFeedbackSubmit = (e) => {
     e.preventDefault();
-    axios.post('/api/feedback', feedbackForm)
+    const token = localStorage.getItem('token');
+    axios.post('http://localhost:5000/api/feedback', feedbackForm, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
       .then(res => {
         toast.success('Feedback submitted successfully');
         setFeedbackForm({ teacher: '', message: '' });
@@ -365,14 +374,18 @@ const StudentDashboard = () => {
 
   const handleProfileUpdate = (e) => {
     e.preventDefault();
-    axios.put('/api/students/profile', profileForm)
+    axios.put('http://localhost:5000/api/students/profile', {
+      section: editForm.section,
+      semester: editForm.semester
+    })
       .then(res => {
         toast.success('Profile updated successfully');
-        loadProfile();
+        setStudent(res.data.user);
+        setEditMode(false);
       })
       .catch(err => {
-        console.error('Error updating profile:', err);
-        toast.error('Failed to update profile');
+        console.error('Profile update error:', err, err.response?.data);
+        toast.error('Failed to update profile: ' + (err.response?.data?.message || 'Unknown error'));
       });
   };
 
@@ -507,6 +520,19 @@ const StudentDashboard = () => {
     localStorage.removeItem('role');
     toast.success('Logged out successfully');
     navigate('/student-login');
+  };
+
+  const handleDeleteFeedback = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5000/api/feedback/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setFeedback(prev => prev.filter(fb => fb._id !== id));
+      toast.success('Feedback deleted');
+    } catch (err) {
+      toast.error('Failed to delete feedback');
+    }
   };
 
   if (!student) {
@@ -695,7 +721,10 @@ const StudentDashboard = () => {
                   <div className="mb-4">
                     <p className="text-gray-600">
                       Displaying {notes.length} notes {searchTerm ? `matching "${searchTerm}"` : ''} 
-                      (sorted using merge sort algorithm)
+                      {filters.department ? ` for ${filters.department} department` : ''}
+                      {filters.semester ? ` in semester ${filters.semester}` : ''}
+                      {filters.subject ? ` for subject ${filters.subject}` : ''}.
+                      
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -848,90 +877,119 @@ const StudentDashboard = () => {
 
               <div className="bg-white p-6 rounded-lg shadow">
                 <h2 className="text-xl font-bold mb-4">Your Feedback History</h2>
-                <div className="space-y-4">
-                  {feedback.map(item => (
-                    <div key={item._id} className="border-b pb-4">
-                      <p className="font-semibold">To: {item.teacher.name}</p>
-                      <p className="text-gray-600">{item.message}</p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </p>
+                {Array.isArray(feedback) && feedback.length > 0 ? (
+                  feedback.map(item => (
+                    <div key={item._id} className="border-b pb-4 flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold">To: {item.teacher?.fullName || item.teacher?.name || item.teacher?.email || 'Unknown Teacher'}</p>
+                        <p className="text-gray-600">{item.message}</p>
+                        <p className="text-sm text-gray-500">{new Date(item.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <button
+                        className="ml-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                        onClick={() => handleDeleteFeedback(item._id)}
+                      >Delete</button>
                     </div>
-                  ))}
-                </div>
+                  ))
+                ) : (
+                  <p>No feedback found.</p>
+                )}
               </div>
             </div>
           )}
 
           {/* Profile Section */}
           {activeSection === 'profile' && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold mb-4">Update Profile</h2>
-              <form onSubmit={handleProfileUpdate}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 mb-2">Name</label>
-                    <input
-                      type="text"
-                      value={profileForm.name}
-                      onChange={(e) => setProfileForm(prev => ({
-                        ...prev,
-                        name: e.target.value
-                      }))}
-                      className="w-full border rounded p-2"
-                      required
-                    />
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+              <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-2xl mx-auto border border-gray-200">
+                <h2 className="text-3xl font-bold text-center mb-6 text-gray-800">Student Profile</h2>
+                <div className="flex flex-col items-center mb-6">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mb-4">
+                    <svg className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
-                  <div>
-                    <label className="block text-gray-700 mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={profileForm.email}
-                      onChange={(e) => setProfileForm(prev => ({
-                        ...prev,
-                        email: e.target.value
-                      }))}
-                      className="w-full border rounded p-2"
-                      required
-                    />
+                  <div className="text-xl font-semibold text-gray-800">{student.name}</div>
+                  <div className="text-gray-500">{student.email}</div>
+                </div>
+                <hr className="my-6" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-gray-500 text-sm">Section</div>
+                      <div className="font-semibold text-lg text-gray-800">
+                        {editMode ? (
+                          <select
+                            value={editForm.section}
+                            onChange={e => setEditForm(f => ({ ...f, section: e.target.value }))}
+                            className="border rounded px-2 py-1 w-32"
+                          >
+                            {sectionOptions.map(section => (
+                              <option key={section} value={section}>{section}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          student.section
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-sm">Department</div>
+                      <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium text-sm">
+                        {student.department}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-gray-700 mb-2">Section</label>
-                    <input
-                      type="text"
-                      value={profileForm.section}
-                      onChange={(e) => setProfileForm(prev => ({
-                        ...prev,
-                        section: e.target.value
-                      }))}
-                      className="w-full border rounded p-2"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 mb-2">Semester</label>
-                    <select
-                      value={profileForm.semester}
-                      onChange={(e) => setProfileForm(prev => ({
-                        ...prev,
-                        semester: e.target.value
-                      }))}
-                      className="w-full border rounded p-2"
-                      required
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-                        <option key={sem} value={sem}>Semester {sem}</option>
-                      ))}
-                    </select>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-gray-500 text-sm">Semester</div>
+                      <div className="font-semibold text-lg text-gray-800">
+                        {editMode ? (
+                          <select
+                            value={editForm.semester}
+                            onChange={e => setEditForm(f => ({ ...f, semester: e.target.value }))}
+                            className="border rounded px-2 py-1 w-36"
+                          >
+                            {[1,2,3,4,5,6,7,8].map(sem => (
+                              <option key={sem} value={sem}>Semester {sem}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          `Semester ${student.semester}`
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-sm">Account ID</div>
+                      <div className="text-xs text-gray-700 font-mono break-all">{student._id}</div>
+                    </div>
                   </div>
                 </div>
-                <button
-                  type="submit"
-                  className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                >
-                  Update Profile
-                </button>
-              </form>
+                <hr className="my-6" />
+                <div className="flex flex-col md:flex-row gap-4">
+                  {editMode ? (
+                    <button
+                      className="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-lg font-semibold"
+                      disabled={
+                        !editForm.section || !editForm.semester ||
+                        (editForm.section === student.section && editForm.semester === student.semester)
+                      }
+                      onClick={handleProfileUpdate}
+                    >Save</button>
+                  ) : (
+                    <button
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-lg font-semibold"
+                      onClick={() => {
+                        setEditForm({
+                          section: student.section || sectionOptions[0],
+                          semester: student.semester || ''
+                        });
+                        setEditMode(true);
+                      }}
+                    >Edit</button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

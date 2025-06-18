@@ -16,37 +16,17 @@ const StudentLogin = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Check if user is already logged in
+  // Check for force login query parameter
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          // Validate token with the server
-          const response = await axios.get('http://localhost:5000/api/students/verify-token', {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          });
-          
-          if (response.data.valid) {
-            navigate('/student-dashboard');
-          } else {
-            // Token is invalid, remove it
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-          }
-        } catch (error) {
-          // Token validation failed, clear storage
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          console.error('Token validation error:', error);
-        }
-      }
-    };
-    
-    checkAuthStatus();
-  }, [navigate]);
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('force') === 'true') {
+      // Clear any existing tokens and user data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Remove the force parameter from URL
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
 
   const { email, password } = formData;
 

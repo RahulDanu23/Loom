@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import userModel from '../models/usermodel.js';
+import Student from '../models/Student.js';
+import Faculty from '../models/Faculty.js';
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -12,8 +13,9 @@ export const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await userModel.findById(decoded.id);
+    // Try to find user in both Student and Faculty collections
+    let user = await Student.findById(decoded.user.id);
+    if (!user) user = await Faculty.findById(decoded.user.id);
     if (!user) {
       return res.status(401).json({
         success: false,
